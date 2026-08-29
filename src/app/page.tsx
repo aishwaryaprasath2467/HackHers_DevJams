@@ -13,7 +13,8 @@ import {
   Target, 
   Trophy, 
   UploadCloud, 
-  AlertCircle 
+  AlertCircle,
+  Loader2
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -32,33 +33,48 @@ export default function Home() {
     confetti({ particleCount: 40, spread: 60, origin: { y: 0.8 } });
   };
 
-  // 2. Interactive Quiz State
+  // 2. Interactive AI Quiz State
+  const [quizTopic, setQuizTopic] = useState('Data Structures & Algorithms');
+  const [quizLoading, setQuizLoading] = useState(false);
   const [quizStarted, setQuizStarted] = useState(false);
   const [currentQ, setCurrentQ] = useState(0);
   const [score, setScore] = useState(0);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [quizFinished, setQuizFinished] = useState(false);
-
-  const quizQuestions = [
+  const [quizQuestions, setQuizQuestions] = useState([
     {
       question: 'What is the time complexity of searching in a Balanced Binary Search Tree?',
       options: ['O(1)', 'O(n)', 'O(log n)', 'O(n log n)'],
       correct: 2,
       explanation: 'In a balanced BST, each comparison cuts the search space in half, giving O(log n) time complexity.',
-    },
-    {
-      question: 'Which CPU scheduling algorithm gives the minimum average waiting time?',
-      options: ['First-Come, First-Served (FCFS)', 'Shortest Job First (SJF)', 'Round Robin (RR)', 'Priority Scheduling'],
-      correct: 1,
-      explanation: 'SJF is proven to be optimal in giving the lowest average waiting time for a given set of processes.',
-    },
-    {
-      question: 'What is the primary role of an Activation Function in Neural Networks?',
-      options: ['Speed up training', 'Introduce non-linearity', 'Normalize the inputs', 'Prevent overfitting'],
-      correct: 1,
-      explanation: 'Without non-linear activation functions, a multi-layer neural network collapses into a simple linear model.',
     }
-  ];
+  ]);
+
+  const generateAIQuiz = async (topicName?: string) => {
+    const targetTopic = topicName || quizTopic;
+    setQuizLoading(true);
+    try {
+      const res = await fetch('/api/quiz', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic: targetTopic }),
+      });
+      const data = await res.json();
+      if (data.questions && data.questions.length > 0) {
+        setQuizQuestions(data.questions);
+        setCurrentQ(0);
+        setScore(0);
+        setSelectedOption(null);
+        setQuizFinished(false);
+        setQuizStarted(true);
+      }
+    } catch (err) {
+      console.error(err);
+      setQuizStarted(true);
+    } finally {
+      setQuizLoading(false);
+    }
+  };
 
   const handleAnswer = (optionIdx: number) => {
     setSelectedOption(optionIdx);
@@ -77,30 +93,36 @@ export default function Home() {
     }
   };
 
-  // 3. AI Doubt Chat State
+  // 3. Real AI Doubt Chat State
   const [messages, setMessages] = useState([
-    { sender: 'ai', text: '👋 Hi Alex! I am your AI study companion. Ask me any doubt or upload a picture of a problem!' }
+    { sender: 'ai', text: '👋 Hi Alex! I am your AI study companion powered by Gemini. Ask me any doubt about your syllabus, homework, or exam concepts!' }
   ]);
   const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
 
-  const sendChatMessage = (e: React.FormEvent) => {
+  const sendChatMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!chatInput.trim()) return;
+    if (!chatInput.trim() || chatLoading) return;
 
     const userText = chatInput;
     setMessages(prev => [...prev, { sender: 'user', text: userText }]);
     setChatInput('');
+    setChatLoading(true);
 
-    // Simulated Smart AI Response
-    setTimeout(() => {
-      setMessages(prev => [
-        ...prev, 
-        { 
-          sender: 'ai', 
-          text: `Great question! Here is the concept broken down: When dealing with "${userText}", think of it step-by-step. I have also added a quick 5-minute practice task to your Adaptive Plan to solidify this!` 
-        }
-      ]);
-    }, 800);
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: userText }),
+      });
+      const data = await res.json();
+      const aiReply = data.reply || "I couldn't process that. Please try again!";
+      setMessages(prev => [...prev, { sender: 'ai', text: aiReply }]);
+    } catch (err) {
+      setMessages(prev => [...prev, { sender: 'ai', text: "⚠️ Error connecting to Gemini API. Check your .env.local key." }]);
+    } finally {
+      setChatLoading(false);
+    }
   };
 
   return (
@@ -272,7 +294,7 @@ export default function Home() {
                 </div>
 
                 <button 
-                  onClick={() => setActiveTab('study')}
+                  onClick={() => { setActiveTab('study'); generateAIQuiz('Binary Search Trees and Memory Management'); }}
                   className="w-full mt-4 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs py-2.5 rounded-xl font-medium transition"
                 >
                   Generate Practice Quiz for Weak Areas →
@@ -288,24 +310,42 @@ export default function Home() {
           <div className="max-w-4xl mx-auto space-y-6">
             <div>
               <h2 className="text-2xl font-bold text-white">Smart Notes & AI Quizzes</h2>
-              <p className="text-sm text-slate-400">Upload lecture PDFs or notes. AI will extract core concepts and test your retention.</p>
+              <p className="text-sm text-slate-400">Generate a custom AI quiz on any subject or upload lecture notes.</p>
             </div>
 
             {!quizStarted ? (
               <div className="space-y-6">
-                {/* Upload Dropzone */}
-                <div className="border-2 border-dashed border-slate-700 hover:border-indigo-500/60 bg-slate-900/40 rounded-2xl p-10 text-center transition cursor-pointer">
-                  <div className="w-14 h-14 bg-indigo-600/20 text-indigo-400 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-indigo-500/30">
-                    <UploadCloud className="w-7 h-7" />
+                {/* Topic Input Box */}
+                <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-2xl space-y-4">
+                  <label className="block text-sm font-semibold text-slate-200">
+                    What topic or subject would you like to be tested on?
+                  </label>
+                  <div className="flex gap-3">
+                    <input
+                      type="text"
+                      value={quizTopic}
+                      onChange={e => setQuizTopic(e.target.value)}
+                      placeholder="e.g. Operating Systems, Machine Learning, Python OOP..."
+                      className="flex-1 bg-slate-800/80 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                    />
+                    <button
+                      disabled={quizLoading}
+                      onClick={() => generateAIQuiz()}
+                      className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold px-6 py-3 rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center gap-2"
+                    >
+                      {quizLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                      Generate AI Quiz
+                    </button>
                   </div>
-                  <h3 className="font-semibold text-slate-200">Drag and drop your PDF or Lecture Slides</h3>
+                </div>
+
+                {/* Upload Dropzone */}
+                <div className="border-2 border-dashed border-slate-700 hover:border-indigo-500/60 bg-slate-900/40 rounded-2xl p-8 text-center transition cursor-pointer">
+                  <div className="w-12 h-12 bg-indigo-600/20 text-indigo-400 rounded-2xl flex items-center justify-center mx-auto mb-3 border border-indigo-500/30">
+                    <UploadCloud className="w-6 h-6" />
+                  </div>
+                  <h3 className="font-semibold text-slate-200 text-sm">Or drag and drop your Lecture Notes / PDF</h3>
                   <p className="text-xs text-slate-400 mt-1">Supports PDF, DOCX, TXT (Up to 25MB)</p>
-                  <button 
-                    onClick={() => setQuizStarted(true)} 
-                    className="mt-6 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold px-6 py-2.5 rounded-xl shadow-lg shadow-indigo-600/30 transition"
-                  >
-                    Use Sample "Data Structures & OS" Notes
-                  </button>
                 </div>
               </div>
             ) : !quizFinished ? (
@@ -382,13 +422,13 @@ export default function Home() {
                     onClick={() => { setQuizStarted(false); setQuizFinished(false); setCurrentQ(0); setScore(0); setSelectedOption(null); }}
                     className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-6 py-2.5 rounded-xl text-sm font-medium transition"
                   >
-                    Try Another PDF
+                    Generate Another Quiz
                   </button>
                   <button
                     onClick={() => setActiveTab('dashboard')}
                     className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-xl text-sm font-medium transition"
                   >
-                    Update My Adaptive Plan
+                    Update Adaptive Plan
                   </button>
                 </div>
               </div>
@@ -396,7 +436,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* 3. AI DOUBT SOLVER CHAT */}
+        {/* 3. REAL AI DOUBT SOLVER CHAT */}
         {activeTab === 'chat' && (
           <div className="max-w-3xl mx-auto h-[600px] flex flex-col bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden">
             <div className="p-4 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between">
@@ -404,14 +444,14 @@ export default function Home() {
                 <div className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse" />
                 <h3 className="font-bold text-sm text-slate-200">AI Instant Doubt Solver</h3>
               </div>
-              <span className="text-xs text-slate-400">Powered by Gemini 2.5</span>
+              <span className="text-xs text-slate-400">Powered by Gemini 2.5 Live</span>
             </div>
 
             {/* Chat message history */}
             <div className="flex-1 p-5 overflow-y-auto space-y-4">
               {messages.map((m, idx) => (
                 <div key={idx} className={`flex ${m.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-md p-4 rounded-2xl text-sm leading-relaxed ${
+                  <div className={`max-w-md p-4 rounded-2xl text-sm leading-relaxed whitespace-pre-line ${
                     m.sender === 'user' 
                       ? 'bg-indigo-600 text-white rounded-br-none' 
                       : 'bg-slate-800 text-slate-200 rounded-bl-none border border-slate-700/60'
@@ -420,6 +460,15 @@ export default function Home() {
                   </div>
                 </div>
               ))}
+
+              {chatLoading && (
+                <div className="flex justify-start">
+                  <div className="bg-slate-800 border border-slate-700/60 text-slate-400 p-4 rounded-2xl rounded-bl-none text-sm flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+                    Gemini is thinking...
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Input Bar */}
@@ -428,14 +477,15 @@ export default function Home() {
                 type="text"
                 value={chatInput}
                 onChange={e => setChatInput(e.target.value)}
-                placeholder="Ask any question (e.g. Explain how Dijkstra algorithm works)..."
+                placeholder="Ask any question (e.g. Explain how Dijkstra algorithm works in simple terms)..."
                 className="flex-1 bg-slate-800/80 border border-slate-700/80 rounded-xl px-4 py-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
               />
               <button 
                 type="submit" 
-                className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 rounded-xl flex items-center justify-center transition shadow-lg shadow-indigo-600/30"
+                disabled={chatLoading}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 rounded-xl flex items-center justify-center transition shadow-lg shadow-indigo-600/30 disabled:opacity-50"
               >
-                <Send className="w-4 h-4" />
+                {chatLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               </button>
             </form>
           </div>
